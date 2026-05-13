@@ -1,0 +1,273 @@
+SUPABASE DB CREATION
+
+CREATE TABLE Users (
+    user_id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    phone_number VARCHAR(15),
+    role VARCHAR(20) NOT NULL CHECK (role IN ('Musician', 'Venue_Owner', 'Admin')),
+    profile_picture_url TEXT,
+    bio TEXT,
+    city VARCHAR(100),
+    zip_code VARCHAR(10),
+    account_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE Bands (
+    band_id SERIAL PRIMARY KEY,
+    band_name VARCHAR(150) NOT NULL,
+    leader_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+    genre VARCHAR(100) NOT NULL,
+    bio TEXT,
+    profile_picture_url TEXT,
+    member_count INTEGER DEFAULT 1,
+    city VARCHAR(100),
+    zip_code VARCHAR(10),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE Band_Members (
+    member_id SERIAL PRIMARY KEY,
+    band_id INTEGER NOT NULL REFERENCES Bands(band_id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+    instrument VARCHAR(100) NOT NULL,
+    role_in_band VARCHAR(50),
+    joined_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(band_id, user_id)
+);
+
+CREATE TABLE Gig_Listings (
+    gig_id SERIAL PRIMARY KEY,
+    venue_owner_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+    gig_title VARCHAR(200) NOT NULL,
+    description TEXT,
+    genre_required VARCHAR(100) NOT NULL,
+    performance_date DATE NOT NULL,
+    performance_time TIME NOT NULL,
+    venue_name VARCHAR(150) NOT NULL,
+    location_city VARCHAR(100) NOT NULL,
+    location_zip_code VARCHAR(10),
+    duration_hours DECIMAL(3,1),
+    offered_pay DECIMAL(10,2) NOT NULL,
+    payment_status VARCHAR(20) DEFAULT 'Pending' CHECK (payment_status IN ('Pending', 'Paid', 'Partially_Paid')),
+    gig_status VARCHAR(20) DEFAULT 'Open' CHECK (gig_status IN ('Open', 'Filled', 'Completed', 'Cancelled')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Applications (
+    application_id SERIAL PRIMARY KEY,
+    gig_id INTEGER NOT NULL REFERENCES Gig_Listings(gig_id) ON DELETE CASCADE,
+    band_id INTEGER NOT NULL REFERENCES Bands(band_id) ON DELETE CASCADE,
+    application_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    application_status VARCHAR(20) DEFAULT 'Pending' CHECK (application_status IN ('Pending', 'Accepted', 'Rejected', 'Withdrawn')),
+    cover_letter TEXT,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Bookings_Contracts (
+    booking_id SERIAL PRIMARY KEY,
+    gig_id INTEGER NOT NULL REFERENCES Gig_Listings(gig_id) ON DELETE CASCADE,
+    band_id INTEGER NOT NULL REFERENCES Bands(band_id) ON DELETE CASCADE,
+    venue_owner_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+    contract_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    agreed_fee DECIMAL(10,2) NOT NULL,
+    deposit_amount DECIMAL(10,2),
+    deposit_status VARCHAR(20) DEFAULT 'Pending' CHECK (deposit_status IN ('Pending', 'Paid')),
+    contract_status VARCHAR(20) DEFAULT 'Active' CHECK (contract_status IN ('Active', 'Completed', 'Cancelled')),
+    performance_date DATE NOT NULL,
+    performance_time TIME NOT NULL,
+    contract_terms TEXT,
+    signed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+CREATE TABLE Availability_Calendar (
+    availability_id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+    busy_date DATE NOT NULL,
+    busy_time_start TIME,
+    busy_time_end TIME,
+    reason VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, busy_date)
+);
+
+CREATE TABLE Payments (
+    payment_id SERIAL PRIMARY KEY,
+    booking_id INTEGER NOT NULL REFERENCES Bookings_Contracts(booking_id) ON DELETE CASCADE,
+    band_id INTEGER NOT NULL REFERENCES Bands(band_id) ON DELETE CASCADE,
+    venue_owner_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+    amount DECIMAL(10,2) NOT NULL,
+    payment_type VARCHAR(20) NOT NULL CHECK (payment_type IN ('Deposit', 'Final')),
+    payment_status VARCHAR(20) DEFAULT 'Pending' CHECK (payment_status IN ('Pending', 'Completed', 'Failed', 'Refunded')),
+    payment_date TIMESTAMP,
+    payment_method VARCHAR(50),
+    transaction_id VARCHAR(100) UNIQUE,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Recruitment_Ads (
+    recruitment_id SERIAL PRIMARY KEY,
+    band_id INTEGER NOT NULL REFERENCES Bands(band_id) ON DELETE CASCADE,
+    posted_by_user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    instruments_needed VARCHAR(255) NOT NULL,
+    genre VARCHAR(100) NOT NULL,
+    experience_level VARCHAR(50) CHECK (experience_level IN ('Beginner', 'Intermediate', 'Advanced', 'Professional')),
+    city VARCHAR(100),
+    zip_code VARCHAR(10),
+    ad_status VARCHAR(20) DEFAULT 'Active' CHECK (ad_status IN ('Active', 'Filled', 'Closed')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Reviews_Disputes (
+    review_id SERIAL PRIMARY KEY,
+    booking_id INTEGER NOT NULL REFERENCES Bookings_Contracts(booking_id) ON DELETE CASCADE,
+    reviewer_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+    reviewee_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+    rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+    review_text TEXT,
+    review_type VARCHAR(20) DEFAULT 'Review' CHECK (review_type IN ('Review', 'Dispute')),
+    dispute_reason VARCHAR(255),
+    is_flagged BOOLEAN DEFAULT FALSE,
+    admin_notes TEXT,
+    status VARCHAR(20) DEFAULT 'Open' CHECK (status IN ('Open', 'Resolved', 'Pending_Review')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP
+);
+
+CREATE TABLE Setlists (
+    setlist_id SERIAL PRIMARY KEY,
+    band_id INTEGER NOT NULL REFERENCES Bands(band_id) ON DELETE CASCADE,
+    gig_id INTEGER REFERENCES Gig_Listings(gig_id) ON DELETE SET NULL,
+    setlist_name VARCHAR(200) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Setlist_Songs (
+    song_id SERIAL PRIMARY KEY,
+    setlist_id INTEGER NOT NULL REFERENCES Setlists(setlist_id) ON DELETE CASCADE,
+    song_title VARCHAR(200) NOT NULL,
+    artist_name VARCHAR(150),
+    duration_minutes DECIMAL(4,2),
+    song_order INTEGER NOT NULL,
+    genre VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_users_email ON Users(email);
+CREATE INDEX idx_users_role ON Users(role);
+CREATE INDEX idx_bands_leader_id ON Bands(leader_id);
+CREATE INDEX idx_bands_genre ON Bands(genre);
+CREATE INDEX idx_gig_listings_venue_owner_id ON Gig_Listings(venue_owner_id);
+CREATE INDEX idx_gig_listings_genre ON Gig_Listings(genre_required);
+CREATE INDEX idx_gig_listings_status ON Gig_Listings(gig_status);
+CREATE INDEX idx_gig_listings_date ON Gig_Listings(performance_date);
+CREATE INDEX idx_applications_gig_id ON Applications(gig_id);
+CREATE INDEX idx_applications_band_id ON Applications(band_id);
+CREATE INDEX idx_applications_status ON Applications(application_status);
+CREATE INDEX idx_bookings_contracts_band_id ON Bookings_Contracts(band_id);
+CREATE INDEX idx_bookings_contracts_gig_id ON Bookings_Contracts(gig_id);
+CREATE INDEX idx_bookings_contracts_status ON Bookings_Contracts(contract_status);
+CREATE INDEX idx_availability_calendar_user_id ON Availability_Calendar(user_id);
+CREATE INDEX idx_availability_calendar_date ON Availability_Calendar(busy_date);
+CREATE INDEX idx_payments_booking_id ON Payments(booking_id);
+CREATE INDEX idx_payments_status ON Payments(payment_status);
+CREATE INDEX idx_recruitment_ads_band_id ON Recruitment_Ads(band_id);
+CREATE INDEX idx_recruitment_ads_status ON Recruitment_Ads(ad_status);
+CREATE INDEX idx_reviews_disputes_booking_id ON Reviews_Disputes(booking_id);
+CREATE INDEX idx_reviews_disputes_status ON Reviews_Disputes(status);
+CREATE INDEX idx_reviews_disputes_flagged ON Reviews_Disputes(is_flagged);
+CREATE INDEX idx_setlists_band_id ON Setlists(band_id);
+CREATE INDEX idx_setlist_songs_setlist_id ON Setlist_Songs(setlist_id);
+
+INSERT INTO Users (username, email, password_hash, first_name, last_name, phone_number, role, bio, city, zip_code) VALUES
+('hatim_m', 'hatim@gigvault.com', 'hash123', 'Hatim', 'Mustafa', '0300-1234567', 'Musician', 'Professional guitarist', 'Karachi', '75000'),
+('fuzail_r', 'fuzail@gigvault.com', 'hash124', 'Fuzail', 'Raza', '0321-9876543', 'Musician', 'Drummer and percussionist', 'Lahore', '54000'),
+('seniya_n', 'seniya@gigvault.com', 'hash125', 'Seniya', 'Naeem', '0333-5555555', 'Musician', 'Vocalist extraordinaire', 'Islamabad', '44000'),
+('ali_khan', 'ali@gigvault.com', 'hash126', 'Ali', 'Khan', '0345-1111111', 'Musician', 'Bass player', 'Karachi', '75001'),
+('sara_malik', 'sara@gigvault.com', 'hash127', 'Sara', 'Malik', '0300-2222222', 'Venue_Owner', 'Wedding venue coordinator', 'Karachi', '75002'),
+('hassan_sheikh', 'hassan@gigvault.com', 'hash128', 'Hassan', 'Sheikh', '0321-3333333', 'Venue_Owner', 'Bar & lounge owner', 'Lahore', '54001'),
+('fatima_events', 'fatima@gigvault.com', 'hash129', 'Fatima', 'Events', '0333-4444444', 'Venue_Owner', 'Event management specialist', 'Islamabad', '44001'),
+('admin_user', 'admin@gigvault.com', 'hash130', 'Admin', 'User', '0300-9999999', 'Admin', 'Platform administrator', 'Karachi', '75003');
+
+INSERT INTO Bands (band_name, leader_id, genre, bio, member_count, city, zip_code) VALUES
+('The Harmonics', 1, 'Rock', 'High energy rock band', 3, 'Karachi', '75000'),
+('Jazz Masters', 2, 'Jazz', 'Smooth jazz collective', 4, 'Lahore', '54000'),
+('Pop Stars', 3, 'Pop', 'Contemporary pop sensation', 3, 'Islamabad', '44000');
+
+INSERT INTO Band_Members (band_id, user_id, instrument, role_in_band) VALUES
+(1, 1, 'Guitar', 'Leader'),
+(1, 2, 'Drums', 'Percussionist'),
+(1, 4, 'Bass', 'Bassist'),
+(2, 2, 'Drums', 'Leader'),
+(2, 3, 'Vocals', 'Singer'),
+(3, 3, 'Vocals', 'Leader'),
+(3, 1, 'Guitar', 'Guitarist');
+
+INSERT INTO Gig_Listings (venue_owner_id, gig_title, description, genre_required, performance_date, performance_time, venue_name, location_city, location_zip_code, duration_hours, offered_pay, gig_status) VALUES
+(5, 'Wedding Reception - Rock Band Needed', 'Looking for energetic rock band for wedding', 'Rock', '2026-06-15', '19:00:00', 'Grand Ballroom Karachi', 'Karachi', '75000', 4.5, 50000, 'Open'),
+(6, 'Jazz Night at The Blue Room', 'Intimate jazz performance for lounge ambiance', 'Jazz', '2026-06-20', '21:00:00', 'The Blue Room Bar', 'Lahore', '54000', 3.0, 35000, 'Open'),
+(7, 'Corporate Event - Pop Music', 'Corporate party needs energetic pop band', 'Pop', '2026-07-01', '18:00:00', 'Business Tower Islamabad', 'Islamabad', '44000', 5.0, 60000, 'Filled'),
+(5, 'Birthday Party Entertainment', 'Fun birthday bash, any upbeat genre', 'Pop', '2026-06-25', '20:00:00', 'House Party Karachi', 'Karachi', '75001', 3.5, 30000, 'Open'),
+(6, 'Late Night Lounge Jazz', 'Background jazz for sophisticated ambiance', 'Jazz', '2026-07-10', '22:00:00', 'Jazz Lounge Lahore', 'Lahore', '54001', 2.5, 25000, 'Open');
+
+INSERT INTO Applications (gig_id, band_id, application_status, cover_letter) VALUES
+(1, 1, 'Accepted', 'We are perfect for your wedding! High energy and professional.'),
+(2, 2, 'Pending', 'We would love to bring smooth jazz vibes to your venue.'),
+(3, 3, 'Accepted', 'Our pop band is ready to rock your corporate event!'),
+(4, 1, 'Pending', 'The Harmonics can deliver fun entertainment for any birthday party.');
+
+INSERT INTO Bookings_Contracts (gig_id, band_id, venue_owner_id, agreed_fee, deposit_amount, deposit_status, contract_status, performance_date, performance_time, contract_terms) VALUES
+(1, 1, 5, 50000, 15000, 'Paid', 'Active', '2026-06-15', '19:00:00', 'Payment on completion. Cancellation 7 days notice.'),
+(3, 3, 7, 60000, 20000, 'Paid', 'Active', '2026-07-01', '18:00:00', 'Deposit paid. Final payment on performance day.');
+
+INSERT INTO Availability_Calendar (user_id, busy_date, busy_time_start, busy_time_end, reason) VALUES
+(1, '2026-06-15', '18:00:00', '23:30:00', 'Gig: Wedding Reception'),
+(2, '2026-06-20', '20:30:00', '23:30:00', 'Gig: Jazz Night'),
+(3, '2026-07-01', '17:00:00', '22:00:00', 'Gig: Corporate Event'),
+(1, '2026-06-10', '10:00:00', '14:00:00', 'Band Practice'),
+(2, '2026-06-12', '19:00:00', '21:00:00', 'Recording Session');
+
+INSERT INTO Payments (booking_id, band_id, venue_owner_id, amount, payment_type, payment_status, payment_date, payment_method, transaction_id, notes) VALUES
+(1, 1, 5, 15000, 'Deposit', 'Completed', '2026-06-01', 'Bank Transfer', 'TXN001', 'Deposit for wedding gig'),
+(2, 3, 7, 20000, 'Deposit', 'Completed', '2026-06-15', 'Bank Transfer', 'TXN002', 'Deposit for corporate event'),
+(1, 1, 5, 35000, 'Final', 'Pending', NULL, 'Bank Transfer', NULL, 'Awaiting gig completion');
+
+INSERT INTO Recruitment_Ads (band_id, posted_by_user_id, title, description, instruments_needed, genre, experience_level, city, zip_code, ad_status) VALUES
+(1, 1, 'Keyboard Player Needed for Rock Band', 'The Harmonics looking for keyboardist to complete our lineup', 'Keyboard, Synthesizer', 'Rock', 'Intermediate', 'Karachi', '75000', 'Active'),
+(2, 2, 'Trumpet Player for Jazz Ensemble', 'Jazz Masters seeking experienced trumpet player', 'Trumpet, Horn', 'Jazz', 'Advanced', 'Lahore', '54000', 'Active'),
+(3, 3, 'Backup Dancer/Percussionist', 'Pop Stars need additional percussionist for upcoming gigs', 'Percussion, Backup Vocals', 'Pop', 'Intermediate', 'Islamabad', '44000', 'Active');
+
+INSERT INTO Reviews_Disputes (booking_id, reviewer_id, reviewee_id, rating, review_text, review_type, status) VALUES
+(1, 5, 1, 5, 'Excellent performance! The band was professional and energetic. Highly recommended!', 'Review', 'Resolved'),
+(2, 7, 3, 4, 'Great pop performance at our corporate event. Minor timing issues but overall fantastic!', 'Review', 'Resolved');
+
+INSERT INTO Setlists (band_id, gig_id, setlist_name) VALUES
+(1, 1, 'Wedding Reception Setlist'),
+(2, 2, 'Jazz Night Setlist'),
+(3, 3, 'Corporate Event Setlist');
+
+INSERT INTO Setlist_Songs (setlist_id, song_title, artist_name, duration_minutes, song_order, genre) VALUES
+(1, 'Wonderwall', 'Oasis', 4.18, 1, 'Rock'),
+(1, 'Bohemian Rhapsody', 'Queen', 5.55, 2, 'Rock'),
+(1, 'Stairway to Heaven', 'Led Zeppelin', 8.02, 3, 'Rock'),
+(2, 'Fly Me to the Moon', 'Frank Sinatra', 2.40, 1, 'Jazz'),
+(2, 'Take Five', 'Dave Brubeck', 5.24, 2, 'Jazz'),
+(3, 'Blinding Lights', 'The Weeknd', 3.20, 1, 'Pop'),
+(3, 'Levitating', 'Dua Lipa', 3.23, 2, 'Pop'),
+(3, 'As It Was', 'Harry Styles', 2.32, 3, 'Pop'),
+(3, 'Anti-Hero', 'Taylor Swift', 3.21, 4, 'Pop');
+
