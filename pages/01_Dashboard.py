@@ -3,6 +3,7 @@ import streamlit as st
 from components.auth_guard import auth_guard
 from components.sidebar import render_sidebar
 from services.analytics_service import get_client_analytics, get_musician_analytics
+from services.band_service import get_active_band_id, get_band_by_id
 from utils import format_currency, format_date, status_badge_html
 
 st.set_page_config(
@@ -78,7 +79,20 @@ else:
     st.markdown(f'<div class="page-title">🎵 Welcome back, {username}</div>', unsafe_allow_html=True)
     st.markdown('<div class="page-subtitle">Your musician dashboard — find gigs, track applications and earnings.</div>', unsafe_allow_html=True)
 
-    stats = get_musician_analytics(user_id)
+    band_id = get_active_band_id(user_id)
+    band = get_band_by_id(band_id) if band_id else None
+
+    if band:
+        st.markdown(
+            f'<div style="margin:0.5rem 0 1rem;color:#cbd5e1;">'
+            f'Current band: <b style="color:#f1f5f9;">{band.name}</b>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("You are not currently in a band. Create or join one from My Band before applying to gigs.")
+
+    stats = get_musician_analytics(band_id)
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Applications Sent", stats["total_applications"])

@@ -15,8 +15,8 @@ def seed_demo_data() -> None:
         db.add(MusicianProfile(user_id=musician.id, stage_name="Lucky Live", genres="Jazz, Pop, Rock", instruments="Guitar, Vocals", hourly_rate=75, years_experience=4))
         today = datetime.date.today()
         db.add_all([
-            GigListing(client_id=client.id, title="Friday Jazz Night", description="Need a smooth jazz performer for a dinner crowd.", genre="Jazz", city="Karachi", performance_date=today + datetime.timedelta(days=10), start_time=datetime.time(20, 0), end_time=datetime.time(23, 0), duration_hours=3, budget=500, requirements="Bring your own instrument.", status=GigStatus.OPEN),
-            GigListing(client_id=client.id, title="Acoustic Rooftop Set", description="Chill acoustic set for a private event.", genre="Folk", city="Karachi", performance_date=today + datetime.timedelta(days=18), start_time=datetime.time(19, 0), end_time=datetime.time(21, 0), duration_hours=2, budget=350, requirements="Acoustic guitar preferred.", status=GigStatus.OPEN),
+            GigListing(client_id=client.id, title="Friday Jazz Night", description="Need a smooth jazz performer for a dinner crowd.", genre="Jazz", city="Karachi", performance_date=today + datetime.timedelta(days=10), start_time=datetime.time(20, 0), duration_hours=3, budget=500, status=GigStatus.OPEN),
+            GigListing(client_id=client.id, title="Acoustic Rooftop Set", description="Chill acoustic set for a private event.", genre="Folk", city="Karachi", performance_date=today + datetime.timedelta(days=18), start_time=datetime.time(19, 0), duration_hours=2, budget=350, status=GigStatus.OPEN),
         ])
         print("Demo data seeded. Login: seniya / seniya or lucky / lucky123")
 

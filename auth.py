@@ -73,10 +73,12 @@ def set_session(user_data: dict) -> None:
     st.session_state["username"]  = user_data["username"]
     st.session_state["email"]     = user_data["email"]
     st.session_state["role"]      = user_data["role"]
+    if user_data["role"] == UserRole.MUSICIAN.value:
+        st.session_state["active_band_id"] = _get_default_band_id(user_data["user_id"])
 
 
 def clear_session() -> None:
-    for key in ["authenticated", "user_id", "username", "email", "role"]:
+    for key in ["authenticated", "user_id", "username", "email", "role", "active_band_id"]:
         st.session_state.pop(key, None)
 
 
@@ -91,3 +93,16 @@ def get_current_role() -> str | None:
 
 def get_current_username() -> str | None:
     return st.session_state.get("username")
+
+
+def _get_default_band_id(user_id: int) -> int | None:
+    from models import BandMember
+
+    with get_db() as db:
+        membership = (
+            db.query(BandMember)
+            .filter(BandMember.user_id == user_id)
+            .order_by(BandMember.joined_at.asc(), BandMember.id.asc())
+            .first()
+        )
+        return membership.band_id if membership else None

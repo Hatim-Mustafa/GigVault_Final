@@ -3,6 +3,7 @@ import streamlit as st
 from components.auth_guard import auth_guard
 from components.sidebar import render_sidebar
 from database import get_db
+from services.band_service import get_active_band_id, get_band_by_id
 from queries.payment_queries import (
     get_client_payment_summary,
     get_client_payments_with_details,
@@ -23,6 +24,8 @@ render_sidebar()
 
 role = st.session_state["role"]
 user_id = st.session_state["user_id"]
+band_id = get_active_band_id(user_id) if role == "Musician" else None
+band = get_band_by_id(band_id) if band_id else None
 
 if role == "Venue_Owner":
     st.markdown('<div class="page-title">💰 Payment Dashboard</div>', unsafe_allow_html=True)
@@ -51,10 +54,10 @@ if role == "Venue_Owner":
             f"  📁 All ({len(rows)})  ",
         ])
 
-        def render_client_payment(payment, musician_user, gig, show_pay_btn=False):
+        def render_client_payment(payment, band_record, gig, show_pay_btn=False, key_prefix=""):
             status_val = payment.status.value if hasattr(payment.status, "value") else payment.status
-            musician_profile = musician_user.musician_profile
-            stage_name = musician_profile.stage_name if musician_profile and musician_profile.stage_name else musician_user.username
+            band_name = band_record.name if band_record else "Unknown band"
+            leader_name = band_record.leader.username if band_record and band_record.leader else "Unknown"
 
             st.markdown(
                 f"""
@@ -65,7 +68,8 @@ if role == "Venue_Owner":
                         {status_badge_html(status_val)}
                     </div>
                     <div style="display:flex;gap:1.5rem;font-size:0.86rem;color:#94a3b8;flex-wrap:wrap;">
-                        <span>🎤 {stage_name}</span>
+                        <span>🎤 {band_name}</span>
+                        <span>👤 Leader: {leader_name}</span>
                         <span>📅 {format_date(gig.performance_date)}</span>
                         <span>💵 <b style="color:#a78bfa;">{format_currency(payment.amount)}</b></span>
                         {f'<span style="color:#4ade80;">✅ Paid: {format_date(payment.paid_at)}</span>' if payment.paid_at else ''}
@@ -77,7 +81,8 @@ if role == "Venue_Owner":
 
             if show_pay_btn:
                 col_btn, _ = st.columns([1, 4])
-                if col_btn.button(f"💸 Mark Paid", key=f"pay_{payment.id}", type="primary"):
+                key = f"pay_{payment.id}" + (f"_{key_prefix}" if key_prefix else "")
+                if col_btn.button(f"💸 Mark Paid", key=key, type="primary"):
                     try:
                         mark_payment_paid(payment.id, user_id)
                         st.success("Payment marked as paid!")
@@ -86,22 +91,24 @@ if role == "Venue_Owner":
                         st.error(str(e))
 
         with tab_pending:
-            pending_rows = [(p, u, g) for p, u, g in rows if (p.status.value if hasattr(p.status, "value") else p.status) == "Pending"]
+            pending_rows = [(p, b, g) for p, b, g in rows if (p.status.value if hasattr(p.status, "value") else p.status) == "Pending"]
             if not pending_rows:
                 st.markdown(empty_state("No pending payments.", "✅"), unsafe_allow_html=True)
-            for p, u, g in pending_rows:
-                render_client_payment(p, u, g, show_pay_btn=True)
+            for p, b, g in pending_rows:
+                render_client_payment(p, b, g, show_pay_btn=True, key_prefix="pending")
 
         with tab_paid:
-            paid_rows = [(p, u, g) for p, u, g in rows if (p.status.value if hasattr(p.status, "value") else p.status) == "Completed"]
+            paid_rows = [(p, b, g) for p, b, g in rows if (p.status.value if hasattr(p.status, "value") else p.status) == "Completed"]
             if not paid_rows:
                 st.markdown(empty_state("No completed payments yet.", "💳"), unsafe_allow_html=True)
-            for p, u, g in paid_rows:
-                render_client_payment(p, u, g, show_pay_btn=False)
+            for p, b, g in paid_rows:
+                render_client_payment(p, b, g, show_pay_btn=False, key_prefix="paid")
 
         with tab_all:
-            for p, u, g in rows:
-                render_client_payment(p, u, g, show_pay_btn=(p.status.value if hasattr(p.status, "value") else p.status) == "Pending")
+            for p, b, g in rows:
+                status_val_local = p.status.value if hasattr(p.status, "value") else p.status
+                prefix = f"all_{status_val_local.lower()}"
+                render_client_payment(p, b, g, show_pay_btn=(status_val_local == "Pending"), key_prefix=prefix)
 
 else:
     st.markdown('<div class="page-title">💵 My Earnings</div>', unsafe_allow_html=True)
@@ -110,9 +117,17 @@ else:
         unsafe_allow_html=True,
     )
 
+    if band:
+        st.markdown(
+            f'<div style="margin:0.5rem 0 1rem;color:#cbd5e1;">Earnings for <b style="color:#f1f5f9;">{band.name}</b></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("Join or create a band to view earnings.")
+
     with get_db() as db:
-        summary = get_musician_payment_summary(db, user_id)
-        rows = get_musician_payments_with_details(db, user_id)
+        summary = get_musician_payment_summary(db, band_id) if band_id else {"pending_count": 0, "pending_amount": 0.0, "completed_count": 0, "completed_amount": 0.0, "total_earned": 0.0}
+        rows = get_musician_payments_with_details(db, band_id) if band_id else []
 
     c1, c2, c3 = st.columns(3)
     c1.metric("💰 Total Earned", format_currency(summary["total_earned"]))

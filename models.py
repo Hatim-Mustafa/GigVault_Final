@@ -67,12 +67,9 @@ class User(Base):
     client_profile    = relationship("ClientProfile",   back_populates="user", uselist=False, cascade="all, delete-orphan")
     musician_profile  = relationship("MusicianProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     gig_listings      = relationship("GigListing",      foreign_keys="GigListing.client_id",       back_populates="client",   cascade="all, delete-orphan")
-    applications      = relationship("Application",     foreign_keys="Application.band_id",    back_populates="musician", cascade="all, delete-orphan")
     client_bookings   = relationship("BookingContract", foreign_keys="BookingContract.client_id",  back_populates="client")
-    musician_bookings = relationship("BookingContract", foreign_keys="BookingContract.musician_id",back_populates="musician")
     availability_slots= relationship("AvailabilityCalendar", back_populates="musician", cascade="all, delete-orphan")
     client_payments   = relationship("Payment", foreign_keys="Payment.client_id",   back_populates="client")
-    musician_payments = relationship("Payment", foreign_keys="Payment.musician_id", back_populates="musician")
     bands_led         = relationship("Band",    foreign_keys="Band.leader_id",       back_populates="leader")
     band_memberships  = relationship("BandMember", foreign_keys="BandMember.user_id",back_populates="user", cascade="all, delete-orphan")
     setlists          = relationship("Setlist", back_populates="musician", cascade="all, delete-orphan")
@@ -122,6 +119,9 @@ class Band(Base):
     created_at = Column(DateTime, server_default=func.now())
     leader  = relationship("User",       foreign_keys=[leader_id], back_populates="bands_led")
     members = relationship("BandMember", back_populates="band", cascade="all, delete-orphan")
+    applications = relationship("Application", back_populates="band", cascade="all, delete-orphan")
+    bookings = relationship("BookingContract", back_populates="band", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="band", cascade="all, delete-orphan")
 
 
 class BandMember(Base):
@@ -130,6 +130,7 @@ class BandMember(Base):
     band_id      = Column(Integer, ForeignKey("bands.band_id",  ondelete="CASCADE"), nullable=False)
     user_id      = Column(Integer, ForeignKey("users.user_id",  ondelete="CASCADE"), nullable=False)
     role_in_band = Column(String(50))
+    instrument = Column(String(50))
     joined_at    = Column("joined_date", DateTime, server_default=func.now())
     __table_args__ = (UniqueConstraint("band_id", "user_id", name="uq_band_member"),)
     band = relationship("Band", back_populates="members")
@@ -169,7 +170,7 @@ class Application(Base):
     __tablename__ = "applications"
     id        = Column("application_id",   Integer, primary_key=True, autoincrement=True)
     gig_id    = Column(Integer, ForeignKey("gig_listings.gig_id", ondelete="CASCADE"), nullable=False)
-    band_id   = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    band_id   = Column(Integer, ForeignKey("bands.band_id", ondelete="CASCADE"), nullable=False)
     message   = Column("cover_letter", Text)
     status    = Column("application_status", String(20), default=ApplicationStatus.PENDING.value, nullable=False)
     applied_at    = Column("application_date",   DateTime, server_default=func.now())
@@ -180,7 +181,7 @@ class Application(Base):
         Index("ix_application_gig_status",      "gig_id",   "application_status"),
     )
     gig      = relationship("GigListing", back_populates="applications")
-    musician = relationship("User", foreign_keys=[band_id], back_populates="applications")
+    band     = relationship("Band", foreign_keys=[band_id], back_populates="applications")
 
 
 class BookingContract(Base):
@@ -188,7 +189,7 @@ class BookingContract(Base):
     id            = Column("booking_id",     Integer, primary_key=True, autoincrement=True)
     gig_id        = Column(Integer, ForeignKey("gig_listings.gig_id",  ondelete="CASCADE"), unique=True, nullable=False)
     client_id     = Column("venue_owner_id", Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    musician_id   = Column("band_id",        Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    musician_id   = Column("band_id",        Integer, ForeignKey("bands.band_id", ondelete="CASCADE"), nullable=False)
     agreed_amount = Column("agreed_fee",     Numeric(10, 2), nullable=False)
     status        = Column("contract_status",String(20), default=BookingStatus.ACTIVE.value, nullable=False)
     booked_at     = Column("contract_date",  DateTime, server_default=func.now())
@@ -200,7 +201,7 @@ class BookingContract(Base):
     )
     gig      = relationship("GigListing", back_populates="booking")
     client   = relationship("User", foreign_keys=[client_id],   back_populates="client_bookings")
-    musician = relationship("User", foreign_keys=[musician_id], back_populates="musician_bookings")
+    band     = relationship("Band", foreign_keys=[musician_id], back_populates="bookings")
     payment  = relationship("Payment", back_populates="booking", uselist=False, cascade="all, delete-orphan")
 
 
@@ -221,7 +222,7 @@ class Payment(Base):
     id           = Column("payment_id",    Integer, primary_key=True, autoincrement=True)
     booking_id   = Column(Integer, ForeignKey("bookings_contracts.booking_id", ondelete="CASCADE"), nullable=False)
     client_id    = Column("venue_owner_id",Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    musician_id  = Column("band_id",       Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    musician_id  = Column("band_id",       Integer, ForeignKey("bands.band_id", ondelete="CASCADE"), nullable=False)
     amount       = Column(Numeric(10, 2),  nullable=False)
     payment_type = Column(String(20), nullable=False, default="Final")
     status       = Column("payment_status",String(20), default=PaymentStatus.PENDING.value, nullable=False)
@@ -234,7 +235,7 @@ class Payment(Base):
     )
     booking  = relationship("BookingContract", back_populates="payment")
     client   = relationship("User", foreign_keys=[client_id],   back_populates="client_payments")
-    musician = relationship("User", foreign_keys=[musician_id], back_populates="musician_payments")
+    band     = relationship("Band", foreign_keys=[musician_id], back_populates="payments")
 
 
 class ReviewDispute(Base):

@@ -1,7 +1,11 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path
+from dotenv import load_dotenv
 
-load_dotenv()
+ROOT_DIR = Path(__file__).resolve().parent
+load_dotenv(ROOT_DIR / ".env")
+
 
 SUPABASE_DB_URL: str = os.getenv("SUPABASE_DB_URL", "")
 DATABASE_URL: str = os.getenv("DATABASE_URL", "")
@@ -51,7 +55,8 @@ VENUE_TYPES: list[str] = [
 def get_database_url() -> str:
     url = SUPABASE_DB_URL or DATABASE_URL
     if not url:
-        return "sqlite:///./gigvault.db"
+        sqlite_path = ROOT_DIR / "gigvault.db"
+        return f"sqlite:///{sqlite_path.as_posix()}"
     return url
 
 

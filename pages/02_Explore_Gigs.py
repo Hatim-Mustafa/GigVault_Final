@@ -8,6 +8,7 @@ from config import MUSIC_GENRES_FILTER
 from database import get_db
 from queries.gig_queries import get_open_gigs_filtered
 from services.application_service import apply_to_gig
+from services.band_service import get_active_band_id, get_band_by_id
 from utils import empty_state, format_currency, format_date, format_time, status_badge_html
 
 st.set_page_config(
@@ -20,12 +21,22 @@ require_musician()
 render_sidebar()
 
 musician_id = st.session_state["user_id"]
+band_id = get_active_band_id(musician_id)
+active_band = get_band_by_id(band_id) if band_id else None
 
 st.markdown('<div class="page-title">🔍 Explore Gigs</div>', unsafe_allow_html=True)
 st.markdown(
     '<div class="page-subtitle">Browse open gig listings and apply to perform.</div>',
     unsafe_allow_html=True,
 )
+
+if active_band:
+    st.markdown(
+        f'<div style="margin-bottom:1rem;color:#cbd5e1;">Applying as <b style="color:#f1f5f9;">{active_band.name}</b></div>',
+        unsafe_allow_html=True,
+    )
+else:
+    st.info("You need to join or create a band before applying to gigs.")
 
 with st.expander("🎛 Filter Gigs", expanded=True):
     fc1, fc2, fc3, fc4, fc5 = st.columns([2, 2, 2, 1.5, 1.5])
@@ -82,11 +93,12 @@ else:
 
         with st.form(f"apply_form_{gig.id}"):
             msg = st.text_area("Cover Message", key=f"msg_{gig.id}")
-            apply_btn = st.form_submit_button("📩 Apply Now", type="primary")
+            apply_btn = st.form_submit_button("📩 Apply Now", type="primary", disabled=not band_id)
 
-            if apply_btn:
+            if apply_btn and band_id:
                 apply_to_gig(
-                    musician_id=musician_id,
+                    user_id=musician_id,
+                    band_id=band_id,
                     gig_id=gig.id,
                     message=msg,
                 )

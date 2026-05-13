@@ -1,9 +1,9 @@
 import datetime
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from models import BookingContract, GigListing, Payment, PaymentStatus, User
+from models import Band, BookingContract, GigListing, Payment, PaymentStatus, User
 
 
 def get_client_payment_summary(db: Session, client_id: int) -> dict:
@@ -31,10 +31,10 @@ def get_client_payment_summary(db: Session, client_id: int) -> dict:
     return summary
 
 
-def get_musician_payment_summary(db: Session, musician_id: int) -> dict:
+def get_musician_payment_summary(db: Session, band_id: int) -> dict:
     rows = (
         db.query(Payment.status, func.count(Payment.id), func.sum(Payment.amount))
-        .filter(Payment.musician_id == musician_id)
+        .filter(Payment.musician_id == band_id)
         .group_by(Payment.status)
         .all()
     )
@@ -57,24 +57,28 @@ def get_musician_payment_summary(db: Session, musician_id: int) -> dict:
 
 def get_client_payments_with_details(db: Session, client_id: int) -> list:
     return (
-        db.query(Payment, User, GigListing)
+        db.query(Payment, Band, GigListing)
+        .options(joinedload(Band.leader), joinedload(Payment.booking).joinedload(BookingContract.gig))
         .join(BookingContract, Payment.booking_id == BookingContract.id)
         .join(GigListing, BookingContract.gig_id == GigListing.id)
-        .join(User, Payment.musician_id == User.id)
+        .join(Band, Payment.musician_id == Band.id)
         .filter(Payment.client_id == client_id)
         .order_by(Payment.created_at.asc())
         .all()
     )
 
 
-def get_musician_payments_with_details(db: Session, musician_id: int) -> list:
-    from models import ClientProfile
+def get_musician_payments_with_details(db: Session, band_id: int) -> list:
     return (
         db.query(Payment, User, GigListing)
+        .options(
+            joinedload(Payment.booking).joinedload(BookingContract.gig),
+            joinedload(User.client_profile),
+        )
         .join(BookingContract, Payment.booking_id == BookingContract.id)
         .join(GigListing, BookingContract.gig_id == GigListing.id)
         .join(User, Payment.client_id == User.id)
-        .filter(Payment.musician_id == musician_id)
+        .filter(Payment.musician_id == band_id)
         .order_by(Payment.created_at.asc())
         .all()
     )

@@ -73,13 +73,16 @@ def get_client_dashboard_stats(db: Session, client_id: int) -> dict:
     }
 
 
-def get_musician_dashboard_stats(db: Session, musician_id: int) -> dict:
-    app_stats = (
-        db.query(Application.status, func.count(Application.id))
-        .filter(Application.band_id == musician_id)
-        .group_by(Application.status)
-        .all()
-    )
+def get_musician_dashboard_stats(db: Session, band_id: int | None) -> dict:
+    if band_id is None:
+        app_stats = []
+    else:
+        app_stats = (
+            db.query(Application.status, func.count(Application.id))
+            .filter(Application.band_id == band_id)
+            .group_by(Application.status)
+            .all()
+        )
     app_map = {}
     for status, cnt in app_stats:
         app_map[status.value if hasattr(status, "value") else status] = cnt
@@ -87,7 +90,7 @@ def get_musician_dashboard_stats(db: Session, musician_id: int) -> dict:
     total_earned = (
         db.query(func.sum(Payment.amount))
         .filter(
-            Payment.musician_id == musician_id,
+            Payment.musician_id == band_id,
             Payment.status == PaymentStatus.PAID,
         )
         .scalar()
@@ -97,7 +100,7 @@ def get_musician_dashboard_stats(db: Session, musician_id: int) -> dict:
     pending_pay = (
         db.query(func.sum(Payment.amount))
         .filter(
-            Payment.musician_id == musician_id,
+            Payment.musician_id == band_id,
             Payment.status == PaymentStatus.PENDING,
         )
         .scalar()
@@ -108,7 +111,7 @@ def get_musician_dashboard_stats(db: Session, musician_id: int) -> dict:
         db.query(func.count(BookingContract.id))
         .join(BookingContract.gig)
         .filter(
-            BookingContract.musician_id == musician_id,
+            BookingContract.musician_id == band_id,
             BookingContract.status == BookingStatus.ACTIVE,
             GigListing.performance_date >= datetime.date.today(),
         )

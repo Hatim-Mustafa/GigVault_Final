@@ -36,11 +36,11 @@ def get_client_payments(client_id: int) -> list[Payment]:
         )
 
 
-def get_musician_payments(musician_id: int) -> list[Payment]:
+def get_musician_payments(band_id: int) -> list[Payment]:
     with get_db() as db:
         return (
             db.query(Payment)
-            .filter(Payment.musician_id == musician_id)
+            .filter(Payment.musician_id == band_id)
             .order_by(Payment.created_at.asc())
             .all()
         )

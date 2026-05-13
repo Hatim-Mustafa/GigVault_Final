@@ -49,18 +49,12 @@ with tab_create:
             min_value=datetime.date.today() + datetime.timedelta(days=1),
         )
 
-        c5, c6, c7 = st.columns(3)
+        c5, c6 = st.columns(2)
         start_t = c5.time_input("Start Time", value=datetime.time(20, 0))
-        end_t = c6.time_input("End Time", value=datetime.time(23, 0))
-        duration = c7.number_input("Duration (hours)", min_value=0.5, max_value=12.0, value=3.0, step=0.5)
+        duration = c6.number_input("Duration (hours)", min_value=0.5, max_value=12.0, value=3.0, step=0.5)
 
         budget = st.number_input("Budget ($) *", min_value=50.0, value=500.0, step=50.0)
         description = st.text_area("Description", placeholder="Describe the gig, audience, venue vibe...", height=100)
-        requirements = st.text_area(
-            "Musician Requirements",
-            placeholder="e.g. Must have own equipment, jazz experience required...",
-            height=80,
-        )
 
         submitted = st.form_submit_button("🚀 Publish Gig Listing", type="primary", use_container_width=True)
 
@@ -79,9 +73,7 @@ with tab_create:
                         city=city,
                         performance_date=perf_date,
                         start_time=start_t,
-                        end_time=end_t,
                         budget=budget,
-                        requirements=requirements,
                         duration_hours=duration,
                     )
                     st.success(f"✅ Gig **{gig.title}** published successfully for {format_date(gig.performance_date)}!")
@@ -124,18 +116,20 @@ with tab_list:
                     st.markdown(f"**Genre:** {gig.genre}  &nbsp;&nbsp; **City:** {gig.city}")
                     st.markdown(f"**Date:** {format_date(gig.performance_date)}")
                     if gig.start_time:
-                        st.markdown(f"**Time:** {format_time(gig.start_time)} – {format_time(gig.end_time) if gig.end_time else ''}")
+                        st.markdown(f"*Time:* {format_time(gig.start_time)}")
+                    if gig.duration_hours:
+                        st.markdown(f"*Duration:* {gig.duration_hours}h")
                     st.markdown(f"**Budget:** {format_currency(gig.budget)}")
                     if gig.description:
                         st.markdown(f"**Description:** {gig.description}")
-                    if gig.requirements:
-                        st.markdown(f"**Requirements:** {gig.requirements}")
 
                     if gig.booking:
                         b = gig.booking
-                        musician_name = b.musician.username if b.musician else "Unknown"
+                        band_name = b.band.name if b.band else "Unknown band"
+                        leader_name = b.band.leader.username if b.band and b.band.leader else "Unknown"
                         st.markdown("---")
-                        st.markdown(f"🎤 **Booked Musician:** {musician_name}")
+                        st.markdown(f"🎤 **Booked Band:** {band_name}")
+                        st.caption(f"Leader: {leader_name}")
                         booking_status = b.status.value if hasattr(b.status, "value") else b.status
                         st.markdown(
                             f"📄 **Contract Status:** {status_badge_html(booking_status)}",
@@ -161,7 +155,6 @@ with tab_list:
                                     "Budget ($)", min_value=50.0, value=float(gig.budget), step=50.0, key=f"eb_{gig.id}"
                                 )
                                 new_desc = st.text_area("Description", value=gig.description or "", key=f"ed_{gig.id}")
-                                new_req = st.text_area("Requirements", value=gig.requirements or "", key=f"er_{gig.id}")
                                 save = st.form_submit_button("💾 Save Changes", use_container_width=True)
                                 if save:
                                     try:
@@ -173,9 +166,7 @@ with tab_list:
                                             genre=new_genre,
                                             city=new_city,
                                             start_time=gig.start_time,
-                                            end_time=gig.end_time,
                                             budget=new_budget,
-                                            requirements=new_req,
                                             duration_hours=float(gig.duration_hours) if gig.duration_hours else None,
                                         )
                                         st.success("Gig updated!")

@@ -16,8 +16,8 @@ def render_gig_card(gig, show_apply_btn: bool = False, on_apply=None) -> None:
     time_str = ""
     if gig.start_time:
         time_str = f" · {format_time(gig.start_time)}"
-        if gig.end_time:
-            time_str += f" – {format_time(gig.end_time)}"
+        if gig.duration_hours:
+            time_str += f" ({gig.duration_hours}h)"
 
     venue_name = ""
     if hasattr(gig, "client") and gig.client and gig.client.client_profile:

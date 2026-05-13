@@ -1,6 +1,7 @@
 import datetime
 from typing import Optional
-
+from sqlalchemy.orm import joinedload
+from models import BookingContract, Band
 from database import get_db
 from models import GigListing, GigStatus
 
@@ -13,9 +14,7 @@ def create_gig(
     city: str,
     performance_date: datetime.date,
     start_time: Optional[datetime.time],
-    end_time: Optional[datetime.time],
     budget: float,
-    requirements: str,
     duration_hours: Optional[float] = None,
 ) -> GigListing:
     with get_db() as db:
@@ -67,9 +66,7 @@ def update_gig(
     genre: str,
     city: str,
     start_time: Optional[datetime.time],
-    end_time: Optional[datetime.time],
     budget: float,
-    requirements: str,
     duration_hours: Optional[float],
 ) -> GigListing:
     with get_db() as db:
@@ -92,9 +89,7 @@ def update_gig(
         gig.genre = genre
         gig.city = city.strip()
         gig.start_time = start_time
-        gig.end_time = end_time
         gig.budget = budget
-        gig.requirements = requirements.strip() if requirements else None
         gig.duration_hours = duration_hours
 
         db.commit()
@@ -152,6 +147,7 @@ def get_client_gigs(client_id: int) -> list[GigListing]:
     with get_db() as db:
         return (
             db.query(GigListing)
+            .options(joinedload(GigListing.booking).joinedload(BookingContract.band).joinedload(Band.leader))
             .filter(GigListing.client_id == client_id)
             .order_by(GigListing.performance_date.desc())
             .all()

@@ -8,6 +8,7 @@ from services.application_service import (
     withdraw_application,
 )
 from services.booking_service import accept_application, reject_application
+from services.band_service import get_active_band_id, get_band_by_id, get_band_members
 from utils import empty_state, format_currency, format_date, status_badge_html
 
 st.set_page_config(
@@ -29,7 +30,23 @@ if role == "Musician":
         unsafe_allow_html=True,
     )
 
-    apps = get_musician_applications(user_id)
+    band_id = get_active_band_id(user_id)
+    band = get_band_by_id(band_id) if band_id else None
+
+    if band:
+        members = get_band_members(band.id)
+        member_names = ", ".join(member.username for member in members) if members else "No members listed"
+        st.markdown(
+            f'''<div class="card"><div class="card-title">🎸 {band.name}</div>
+            <div class="card-meta">{band.genre or 'No genre set'} · {band.city or 'City not set'}</div>
+            <div style="font-size:0.88rem;color:#94a3b8;margin-top:0.5rem;">{band.bio or 'No band description yet.'}</div>
+            <div style="font-size:0.84rem;color:#cbd5e1;margin-top:0.5rem;">Members: {member_names}</div></div>''',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("Create or join a band from My Band before applying to gigs.")
+
+    apps = get_musician_applications(band_id) if band_id else []
 
     if not apps:
         st.markdown(
@@ -74,7 +91,7 @@ if role == "Musician":
             if show_withdraw:
                 if st.button(f"↩️ Withdraw", key=f"wd_{app.id}", use_container_width=False):
                     try:
-                        withdraw_application(app.id, user_id)
+                        withdraw_application(app.id, user_id, band_id)
                         st.success("Application withdrawn.")
                         st.rerun()
                     except ValueError as e:
@@ -138,21 +155,22 @@ else:
                 expanded=True,
             ):
                 for app in apps_for_gig:
-                    musician = app.musician
-                    profile = musician.musician_profile if musician else None
-                    stage_name = profile.stage_name if profile and profile.stage_name else musician.username if musician else "Unknown"
-                    genres = profile.genres if profile and profile.genres else "N/A"
+                    band = app.band
+                    leader = band.leader if band else None
+                    leader_name = leader.username if leader else "Unknown"
+                    genres = band.genre if band and band.genre else "N/A"
+                    band_name = band.name if band else "Unknown band"
                     rate_str = format_currency(gig.budget)
 
                     st.markdown(
                         f"""
                         <div class="card">
                             <div class="card-row" style="justify-content:space-between;margin-top:0;margin-bottom:0.4rem;">
-                                <span class="card-title">🎤 {stage_name}</span>
-                                <span style="color:#94a3b8;font-size:0.85rem;">@{musician.username if musician else ''}</span>
+                                <span class="card-title">🎤 {band_name}</span>
+                                <span style="color:#94a3b8;font-size:0.85rem;">Leader: {leader_name}</span>
                             </div>
                             <div style="display:flex;gap:1.5rem;font-size:0.88rem;color:#94a3b8;">
-                                <span>🎵 Genres: {genres}</span>
+                                <span>🎵 Genre: {genres}</span>
                                 <span>💵 Rate: <b style="color:#a78bfa;">{rate_str}</b></span>
                             </div>
                             {f'<div style="margin-top:0.5rem;font-size:0.88rem;color:#cbd5e1;border-top:1px solid #2d2d4a;padding-top:0.5rem;"><b>Message:</b> {app.message}</div>' if app.message else ''}
@@ -165,7 +183,7 @@ else:
                     if col_a.button(f"✅ Accept", key=f"acc_{app.id}", type="primary"):
                         try:
                             accept_application(app.id, user_id)
-                            st.success(f"🎉 {stage_name} accepted! Booking contract created and gig is now Booked.")
+                            st.success(f"🎉 {band_name} accepted! Booking contract created and gig is now Booked.")
                             st.rerun()
                         except ValueError as e:
                             st.error(str(e))

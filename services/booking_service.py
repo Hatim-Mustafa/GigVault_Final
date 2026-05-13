@@ -2,16 +2,19 @@ import datetime
 
 from config import PAYMENT_DUE_DAYS
 from database import get_db
+from sqlalchemy.orm import joinedload
 from models import (
     Application,
     ApplicationStatus,
     AvailabilityCalendar,
+    BandMember,
     BookingContract,
     BookingStatus,
     GigListing,
     GigStatus,
     Payment,
     PaymentStatus,
+    Band,
 )
 
 
@@ -35,18 +38,19 @@ def accept_application(application_id: int, client_id: int) -> BookingContract:
 
         gig = app.gig
 
-        # Check if musician is busy on that date (presence of a row means busy)
+        # Check if any band member is busy on that date (presence of a row means busy)
+        band_member_ids = [row[0] for row in db.query(BandMember.user_id).filter(BandMember.band_id == app.band_id).all()]
         busy = (
             db.query(AvailabilityCalendar)
             .filter(
-                AvailabilityCalendar.musician_id == app.band_id,
+                AvailabilityCalendar.musician_id.in_(band_member_ids),
                 AvailabilityCalendar.date == gig.performance_date,
             )
             .first()
         )
         if busy:
             raise ValueError(
-                "This musician is no longer available on the performance date."
+                "Someone in this band is no longer available on the performance date."
             )
 
         app.status = ApplicationStatus.ACCEPTED
@@ -70,13 +74,14 @@ def accept_application(application_id: int, client_id: int) -> BookingContract:
         db.add(booking)
         db.flush()
 
-        # Mark musician as busy by inserting a row (presence = busy)
-        db.add(
-            AvailabilityCalendar(
-                musician_id=app.band_id,
-                date=gig.performance_date,
+        # Mark all band members as busy by inserting rows (presence = busy)
+        for member_id in band_member_ids:
+            db.add(
+                AvailabilityCalendar(
+                    musician_id=member_id,
+                    date=gig.performance_date,
+                )
             )
-        )
 
         payment = Payment(
             booking_id=booking.id,
@@ -129,16 +134,17 @@ def cancel_booking(booking_id: int, client_id: int) -> BookingContract:
         booking.status = BookingStatus.CANCELLED
         booking.gig.status = GigStatus.CANCELLED
 
-        # Remove the busy date record so musician is free again
-        avail = (
+        # Remove the busy date record so the band is free again
+        band_member_ids = [row[0] for row in db.query(BandMember.user_id).filter(BandMember.band_id == booking.musician_id).all()]
+        avail_rows = (
             db.query(AvailabilityCalendar)
             .filter(
-                AvailabilityCalendar.musician_id == booking.musician_id,
+                AvailabilityCalendar.musician_id.in_(band_member_ids),
                 AvailabilityCalendar.date == booking.gig.performance_date,
             )
-            .first()
+            .all()
         )
-        if avail:
+        for avail in avail_rows:
             db.delete(avail)
 
         db.commit()
@@ -170,6 +176,7 @@ def get_client_bookings(client_id: int) -> list[BookingContract]:
     with get_db() as db:
         return (
             db.query(BookingContract)
+            .options(joinedload(BookingContract.band).joinedload(Band.leader))
             .join(BookingContract.gig)
             .filter(BookingContract.client_id == client_id)
             .order_by(GigListing.performance_date.desc())
@@ -177,12 +184,13 @@ def get_client_bookings(client_id: int) -> list[BookingContract]:
         )
 
 
-def get_musician_bookings(musician_id: int) -> list[BookingContract]:
+def get_musician_bookings(band_id: int) -> list[BookingContract]:
     with get_db() as db:
         return (
             db.query(BookingContract)
+            .options(joinedload(BookingContract.band).joinedload(Band.leader))
             .join(BookingContract.gig)
-            .filter(BookingContract.musician_id == musician_id)
+            .filter(BookingContract.musician_id == band_id)
             .order_by(GigListing.performance_date.desc())
             .all()
         )

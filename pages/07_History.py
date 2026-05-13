@@ -4,39 +4,58 @@ from components.sidebar import render_sidebar
 from database import get_db
 from queries.booking_queries import get_all_bookings_for_client, get_all_bookings_for_musician
 from queries.payment_queries import get_client_payments_with_details, get_musician_payments_with_details
+from services.band_service import get_active_band_id, get_band_by_id
 from utils import empty_state, format_currency, format_date, status_badge_html
 
 st.set_page_config(page_title="History — GigVault", page_icon="📜", layout="wide")
 auth_guard(); render_sidebar()
 role = st.session_state["role"]; user_id = st.session_state["user_id"]
+band_id = get_active_band_id(user_id) if role == "Musician" else None
+band = get_band_by_id(band_id) if band_id else None
 st.markdown('<div class="page-title">📜 History</div>', unsafe_allow_html=True)
 st.markdown('<div class="page-subtitle">Review booking and payment history.</div>', unsafe_allow_html=True)
 with get_db() as db:
     if role == "Venue_Owner":
         bookings = get_all_bookings_for_client(db, user_id); payments = get_client_payments_with_details(db, user_id)
     else:
-        bookings = get_all_bookings_for_musician(db, user_id); payments = get_musician_payments_with_details(db, user_id)
+        bookings = get_all_bookings_for_musician(db, band_id) if band_id else []
+        payments = get_musician_payments_with_details(db, band_id) if band_id else []
+
+if role == "Musician":
+    if band:
+        st.markdown(
+            f'<div style="margin:0.5rem 0 1rem;color:#cbd5e1;">History for <b style="color:#f1f5f9;">{band.name}</b></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("Join or create a band to view your history.")
 
 tab_bookings, tab_payments = st.tabs([f"  📁 Bookings ({len(bookings)})  ", f"  💰 Payments ({len(payments)})  "])
 with tab_bookings:
     if not bookings: st.markdown(empty_state("No booking history yet.", "📁"), unsafe_allow_html=True)
     else:
         status_filter = st.selectbox("Filter by Status", ["All", "Active", "Completed", "Cancelled"], key="hist_booking_filter")
-        shown = bookings if status_filter == "All" else [(b,g,u) for b,g,u in bookings if (b.status.value if hasattr(b.status,"value") else b.status)==status_filter]
-        for booking, gig, other_user in shown:
+        shown = bookings if status_filter == "All" else [(b,g,bn) for b,g,bn in bookings if (b.status.value if hasattr(b.status,"value") else b.status)==status_filter]
+        for booking, gig, band_record in shown:
             status_val = booking.status.value if hasattr(booking.status, "value") else booking.status
-            other_label = "Musician" if role == "Venue_Owner" else "Venue"; other_name = other_user.username
-            if role == "Musician" and getattr(other_user, "client_profile", None): other_name = other_user.client_profile.venue_name or other_user.username
+            other_label = "Band" if role == "Venue_Owner" else "Venue"
+            if role == "Venue_Owner":
+                other_name = band_record.name if band_record else "Unknown band"
+            else:
+                other_name = band_record.client_profile.venue_name if band_record and band_record.client_profile and band_record.client_profile.venue_name else (band_record.username if band_record else "Unknown")
             st.markdown(f'''<div class="card"><div class="card-row" style="justify-content:space-between;margin-top:0;margin-bottom:0.3rem;"><span class="card-title">{gig.title}</span>{status_badge_html(status_val)}</div><div class="card-meta">📅 {format_date(gig.performance_date)} · 📍 {gig.city} · 🎵 {gig.genre}</div><div style="display:flex;gap:1.5rem;font-size:0.87rem;color:#94a3b8;margin-top:0.4rem;flex-wrap:wrap;"><span>{other_label}: {other_name}</span><span>💵 <b style="color:#a78bfa;">{format_currency(booking.agreed_amount)}</b></span><span>🗓 Booked: {format_date(booking.booked_at)}</span></div></div>''', unsafe_allow_html=True)
 with tab_payments:
     if not payments: st.markdown(empty_state("No payment history yet.", "💰"), unsafe_allow_html=True)
     else:
         pay_filter = st.selectbox("Filter by Payment Status", ["All", "Pending", "Completed", "Failed", "Refunded"], key="hist_payment_filter")
-        shown = payments if pay_filter == "All" else [(p,u,g) for p,u,g in payments if (p.status.value if hasattr(p.status,"value") else p.status)==pay_filter]
-        for payment, other_user, gig in shown:
+        shown = payments if pay_filter == "All" else [(p,b,g) for p,b,g in payments if (p.status.value if hasattr(p.status,"value") else p.status)==pay_filter]
+        for payment, band_record, gig in shown:
             status_val = payment.status.value if hasattr(payment.status, "value") else payment.status
-            other_label = "Musician" if role == "Venue_Owner" else "Venue"; other_name = other_user.username
-            if role == "Musician" and getattr(other_user, "client_profile", None): other_name = other_user.client_profile.venue_name or other_user.username
+            other_label = "Band" if role == "Venue_Owner" else "Venue"
+            if role == "Venue_Owner":
+                other_name = band_record.name if band_record else "Unknown band"
+            else:
+                other_name = band_record.client_profile.venue_name if band_record and band_record.client_profile and band_record.client_profile.venue_name else (band_record.username if band_record else "Unknown")
             paid_line = f" · Paid: {format_date(payment.paid_at)}" if payment.paid_at else ""
             note = f'<div style="margin-top:0.5rem;color:#cbd5e1;font-size:0.85rem;">Notes: {payment.notes}</div>' if payment.notes else ''
             st.markdown(f'''<div class="card"><div class="card-row" style="justify-content:space-between;margin-top:0;margin-bottom:0.3rem;"><span class="card-title">{gig.title}</span>{status_badge_html(status_val)}</div><div class="card-meta">{other_label}: {other_name}</div><div style="display:flex;gap:1.5rem;font-size:0.87rem;color:#94a3b8;margin-top:0.4rem;flex-wrap:wrap;"><span>💵 <b style="color:#a78bfa;">{format_currency(payment.amount)}</b></span>{paid_line}</div>{note}</div>''', unsafe_allow_html=True)

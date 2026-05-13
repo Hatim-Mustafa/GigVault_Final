@@ -58,6 +58,7 @@ def render_sidebar() -> None:
 
         if role == "Musician":
             st.page_link("pages/02_Explore_Gigs.py", label="🔍  Explore Gigs")
+            st.page_link("pages/08_My_Band.py", label="🎶  My Band")
             st.page_link("pages/04_Applications.py", label="📋  My Applications")
         else:
             st.page_link("pages/03_My_Gigs.py", label="🎸  My Gigs")

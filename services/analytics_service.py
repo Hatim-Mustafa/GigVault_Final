@@ -10,6 +10,6 @@ def get_client_analytics(client_id: int) -> dict:
         return get_client_dashboard_stats(db, client_id)
 
 
-def get_musician_analytics(musician_id: int) -> dict:
+def get_musician_analytics(band_id: int | None) -> dict:
     with get_db() as db:
-        return get_musician_dashboard_stats(db, musician_id)
+        return get_musician_dashboard_stats(db, band_id)
