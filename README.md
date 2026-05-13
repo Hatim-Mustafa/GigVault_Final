@@ -186,78 +186,87 @@
 
  ---
 
- Generated on: 2026-05-13
+Generated on: 2026-05-13
 
-## ER Diagram (Mermaid)
+## Queries (detailed)
 
-```mermaid
-erDiagram
-    USERS ||--o{ CLIENT_PROFILES : has
-    USERS ||--o{ MUSICIAN_PROFILES : has
-    USERS ||--o{ GIG_LISTINGS : posts
-    USERS ||--o{ BAND_MEMBERS : member
-    BANDS ||--o{ BAND_MEMBERS : has
-    BANDS ||--o{ APPLICATIONS : submits
-    GIG_LISTINGS ||--o{ APPLICATIONS : receives
-    GIG_LISTINGS ||--o{ BOOKINGS_CONTRACTS : books
-    BOOKINGS_CONTRACTS ||--|| PAYMENTS : generates
-    BOOKINGS_CONTRACTS }o--|| BANDS : performer
-    BAND_MEMBERS }o--|| USERS : user
-    BAND_MEMBERS }o--|| BANDS : band
+This section documents the main query helper functions implemented under the `queries/` folder, their purpose, the files where they live, and the equivalent SQL they execute (simplified). These helpers are used by service functions in `services/` and are a good reference when debugging performance or eager-loading issues.
 
-    USERS {
-      int user_id PK
-      string username
-      string email
-      string role
-    }
-    CLIENT_PROFILES {
-      int id PK
-      int user_id FK
-      string venue_name
-    }
-    MUSICIAN_PROFILES {
-      int id PK
-      int user_id FK
-      string instruments
-    }
-    BANDS {
-      int band_id PK
-      int leader_id FK
-      string band_name
-    }
-    BAND_MEMBERS {
-      int member_id PK
-      int band_id FK
-      int user_id FK
-      string instrument
-    }
-    GIG_LISTINGS {
-      int gig_id PK
-      int venue_owner_id FK
-      date performance_date
-      time performance_time
-    }
-    APPLICATIONS {
-      int application_id PK
-      int gig_id FK
-      int band_id FK
-      string application_status
-    }
-    BOOKINGS_CONTRACTS {
-      int booking_id PK
-      int gig_id FK
-      int venue_owner_id FK
-      int band_id FK
-      date performance_date
-      time performance_time
-    }
-    PAYMENTS {
-      int payment_id PK
-      int booking_id FK
-      int venue_owner_id FK
-      int band_id FK
-      numeric amount
-      string payment_status
-    }
-```
+- `queries/gig_queries.py`
+  - `get_open_gigs_filtered(db, genre, city, date, min_budget, max_budget, musician_id)`
+    - Purpose: Return open future gigs with optional filters for genre, city, date, and budget range.
+    - Location: `queries/gig_queries.py`
+    - SQL (simplified):
+      ```sql
+      SELECT * FROM gig_listings
+      WHERE gig_status = 'Open' AND performance_date >= CURRENT_DATE
+      [AND genre_required ILIKE :genre]
+      [AND location_city ILIKE :city]
+      [AND performance_date = :date]
+      [AND offered_pay >= :min_budget]
+      [AND offered_pay <= :max_budget]
+      ORDER BY performance_date ASC;
+      ```
+  - `get_client_gig_stats(db, client_id)`
+    - Purpose: Aggregate counts of a client's gigs by status and count pending applications across those gigs.
+    - SQL (simplified): group-by queries on `gig_listings` and a count join to `applications`.
+
+- `queries/dashboard_queries.py`
+  - `get_client_dashboard_stats(db, client_id)`
+    - Purpose: Provide dashboard metrics for a venue owner: counts by gig status, pending applications, total committed (sum of agreed fees), upcoming performances.
+    - Location: `queries/dashboard_queries.py`
+    - SQL (examples):
+      ```sql
+      SELECT gig_status, COUNT(*) FROM gig_listings WHERE venue_owner_id = :client_id GROUP BY gig_status;
+      SELECT COUNT(a.application_id) FROM applications a JOIN gig_listings g ON g.gig_id = a.gig_id WHERE g.venue_owner_id = :client_id AND a.application_status = 'Pending';
+      SELECT SUM(agreed_fee) FROM bookings_contracts WHERE venue_owner_id = :client_id AND contract_status IN ('Active','Completed');
+      ```
+  - `get_musician_dashboard_stats(db, band_id)`
+    - Purpose: Provide band-centric dashboard metrics: application counts by status, total/pending payments, upcoming bookings count.
+
+- `queries/booking_queries.py`
+  - `get_active_bookings_for_client(db, client_id)`
+    - Purpose: Return active bookings for a client with the gig and band details (eager-loads band leader).
+    - Location: `queries/booking_queries.py`
+    - SQL (simplified):
+      ```sql
+      SELECT b.*, g.*, band.*
+      FROM bookings_contracts b
+      JOIN gig_listings g ON g.gig_id = b.gig_id
+      JOIN bands band ON band.band_id = b.band_id
+      WHERE b.venue_owner_id = :client_id AND b.contract_status = 'Active'
+      ORDER BY g.performance_date ASC;
+      ```
+  - `get_all_bookings_for_client(db, client_id)` — same as above but returns all bookings and orders by date desc.
+  - `get_all_bookings_for_musician(db, band_id)`
+    - Purpose: Return bookings for a band with client (User) details and eager-loads `BookingContract.band` and `Band.leader`.
+
+- `queries/payment_queries.py`
+  - `get_client_payment_summary(db, client_id)`
+    - Purpose: Aggregates count and sum of payments grouped by status for a client.
+    - SQL (simplified): `SELECT payment_status, COUNT(*), SUM(amount) FROM payments WHERE venue_owner_id=:client_id GROUP BY payment_status`.
+  - `get_musician_payment_summary(db, band_id)`
+    - Purpose: Aggregates musician/band payment counts and sums by status.
+  - `get_client_payments_with_details(db, client_id)`
+    - Purpose: Return detailed payments for a client, joined to `bookings_contracts`, `gig_listings`, and `bands` (eager-loading `Band.leader`).
+    - SQL (simplified):
+      ```sql
+      SELECT p.*, band.*, g.*
+      FROM payments p
+      JOIN bookings_contracts bc ON p.booking_id = bc.booking_id
+      JOIN gig_listings g ON bc.gig_id = g.gig_id
+      JOIN bands band ON p.band_id = band.band_id
+      WHERE p.venue_owner_id = :client_id
+      ORDER BY p.created_at ASC;
+      ```
+  - `get_musician_payments_with_details(db, band_id)`
+    - Purpose: Return payments for a musician/band with client `User` and `GigListing` details. Eager-loads `Payment.booking.gig` and the `User.client_profile` to avoid detached lazy loads.
+
+---
+
+Notes:
+
+- The `queries/*` functions are intentionally thin and focused on returning rows or tuples; business logic (validation, state changes, inserts) is done in `services/*` which call these queries or perform their own `db.query` operations within a `get_db()` context manager.
+- Many of the earlier DetachedInstanceError issues were resolved by adding `joinedload()` calls to service/query functions so nested attributes (e.g., `booking.band.leader`, `application.gig.booking`) are loaded while the DB session is open.
+
+If you'd like, I can also create a dedicated markdown section that lists each specific function signature and its exact SQLAlchemy query string for copy-paste debugging.
