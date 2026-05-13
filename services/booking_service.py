@@ -68,6 +68,8 @@ def accept_application(application_id: int, client_id: int) -> BookingContract:
             gig_id=gig.id,
             client_id=client_id,
             musician_id=app.band_id,
+            performance_date=gig.performance_date,
+            performance_time=gig.start_time,
             agreed_amount=agreed,
             status=BookingStatus.ACTIVE,
         )

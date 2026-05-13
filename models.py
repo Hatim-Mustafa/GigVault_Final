@@ -190,6 +190,8 @@ class BookingContract(Base):
     gig_id        = Column(Integer, ForeignKey("gig_listings.gig_id",  ondelete="CASCADE"), unique=True, nullable=False)
     client_id     = Column("venue_owner_id", Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     musician_id   = Column("band_id",        Integer, ForeignKey("bands.band_id", ondelete="CASCADE"), nullable=False)
+    performance_date = Column(Date, nullable=False)
+    performance_time = Column(Time, nullable=False)
     agreed_amount = Column("agreed_fee",     Numeric(10, 2), nullable=False)
     status        = Column("contract_status",String(20), default=BookingStatus.ACTIVE.value, nullable=False)
     booked_at     = Column("contract_date",  DateTime, server_default=func.now())
